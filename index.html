@@ -326,7 +326,7 @@ footer p{font-size:12px;color:var(--text-dim)}
 //  ⚙️  YOUR CONFIGURATION — Edit these 2 lines only
 // ════════════════════════════════════════════════════
 const WHATSAPP_NUMBER = '919XXXXXXXXX'; // Your WhatsApp number with country code (no + or spaces)
-const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2Xfgyf1vVtoNuOFkePha7InYsyGhIO46lnkpDF1uKbA_SOGBdpsQA-i3YTHMxTqrnJSObDy_gYFow/pub?gid=0&single=true&output=csv'; // Paste your published Google Sheet CSV URL here
+const SHEET_URL = ''; // Paste your published Google Sheet CSV URL here
 // ════════════════════════════════════════════════════
 
 // Sample data shown when no sheet is connected
@@ -502,19 +502,49 @@ function openModal(id) {
       <div class="gallery-thumbs">${thumbs}</div>`;
   }
 
-  // Colors
-  const colors = (p.colors||'').split(',').filter(Boolean);
-  document.getElementById('modalColors').innerHTML = colors.map((c,i) => `
-    <div class="color-pill ${i===0?'selected':''}" onclick="selectColor(this,'${c.trim()}')">
-      <div class="cdot" style="background:${colorHex(c)}"></div>
-      ${c.trim()}
-    </div>`).join('');
-  if (colors[0]) selectedColor = colors[0].trim();
+  // Colors with per-color sizes
+  // Format: "Pink:S,M | Black:XL,L" OR legacy "Pink,Black"
+  window._colorSizeMap = {};
+  const colorImgs = (p.image||'').split('|').map(s=>s.trim()).filter(Boolean);
+  const colorRaw = (p.colors||'');
+  const colorEntries = colorRaw.split('|').map(s=>s.trim()).filter(Boolean);
+  let colorNames = [];
+  colorEntries.forEach((entry, i) => {
+    if (entry.includes(':')) {
+      const [cname, csizes] = entry.split(':');
+      const cn = cname.trim();
+      colorNames.push(cn);
+      window._colorSizeMap[cn] = csizes.split(',').map(s=>s.trim()).filter(Boolean);
+      window._colorSizeMap[cn+'__img'] = colorImgs[i] || '';
+    } else {
+      // legacy comma separated colors, use global sizes
+      entry.split(',').forEach((cn, j) => {
+        cn = cn.trim();
+        colorNames.push(cn);
+        window._colorSizeMap[cn] = (p.sizes||'').split(',').map(s=>s.trim()).filter(Boolean);
+        window._colorSizeMap[cn+'__img'] = colorImgs[j] || '';
+      });
+    }
+  });
+  window._colorNames = colorNames;
 
-  // Sizes
-  const sizes = (p.sizes||'').split(',').filter(Boolean);
-  document.getElementById('modalSizes').innerHTML = sizes.map(s => `
-    <div class="size-pill" onclick="toggleSize(this,'${s.trim()}')">${s.trim()}</div>`).join('');
+  document.getElementById('modalColors').innerHTML = colorNames.map((cn,i) => `
+    <div class="color-pill ${i===0?'selected':''}" onclick="selectColor(this,'${cn}')">
+      <div class="cdot" style="background:${colorHex(cn)}"></div>
+      ${cn}
+    </div>`).join('');
+  selectedColor = colorNames[0] || null;
+
+  // Sizes for first color
+  const firstSizes = selectedColor ? (window._colorSizeMap[selectedColor]||[]) : [];
+  document.getElementById('modalSizes').innerHTML = firstSizes.map(s => `
+    <div class="size-pill" onclick="toggleSize(this,'${s}')">${s}</div>`).join('');
+
+  // Update image for first color
+  const firstImg = selectedColor ? (window._colorSizeMap[selectedColor+'__img']||'') : '';
+  if (firstImg && document.getElementById('galleryMain')) {
+    document.getElementById('galleryMain').src = firstImg;
+  }
 
   // Video button
   const vBtn = document.getElementById('modalVideo');
@@ -537,6 +567,25 @@ function selectColor(el, color) {
   document.querySelectorAll('.color-pill').forEach(p => p.classList.remove('selected'));
   el.classList.add('selected');
   selectedColor = color;
+  selectedSizes = [];
+
+  // Update sizes for selected color
+  const sizes = window._colorSizeMap[color] || [];
+  document.getElementById('modalSizes').innerHTML = sizes.map(s => `
+    <div class="size-pill" onclick="toggleSize(this,'${s}')">${s}</div>`).join('');
+
+  // Update image for selected color
+  const img = window._colorSizeMap[color+'__img'] || '';
+  if (img) {
+    const mainImg = document.getElementById('galleryMain');
+    if (mainImg) mainImg.src = img;
+    else {
+      // single image mode - update directly
+      const modalImg = document.getElementById('modalImg');
+      const existing = modalImg.querySelector('img');
+      if (existing) existing.src = img;
+    }
+  }
   updateWALink();
 }
 
