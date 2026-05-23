@@ -112,9 +112,22 @@ header{
 .modal-close{width:32px;height:32px;border-radius:50%;background:var(--surface);border:1px solid var(--border-subtle);color:var(--text-muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .2s}
 .modal-close:hover{border-color:var(--pink);color:var(--pink)}
 .modal-body{display:flex;gap:0;overflow:auto;flex:1}
-.modal-img{width:45%;flex-shrink:0;background:var(--surface)}
-.modal-img img{width:100%;height:100%;object-fit:cover;display:block}
-.modal-img .no-img{width:100%;height:100%;min-height:300px;display:flex;align-items:center;justify-content:center;font-size:64px;opacity:.15}
+.modal-img{width:45%;flex-shrink:0;background:var(--surface);display:flex;flex-direction:column}
+.modal-img .no-img{width:100%;flex:1;min-height:300px;display:flex;align-items:center;justify-content:center;font-size:64px;opacity:.15}
+/* Gallery */
+.gallery-main{flex:1;position:relative;overflow:hidden;min-height:300px}
+.gallery-main img{width:100%;height:100%;object-fit:cover;display:block}
+.gallery-nav{position:absolute;top:50%;transform:translateY(-50%);width:100%;display:flex;justify-content:space-between;padding:0 10px;pointer-events:none}
+.gallery-btn{width:32px;height:32px;border-radius:50%;background:rgba(13,10,11,.75);border:1px solid var(--border-subtle);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;pointer-events:all;transition:all .2s;backdrop-filter:blur(4px)}
+.gallery-btn:hover{border-color:var(--pink);color:var(--pink)}
+.gallery-btn:disabled{opacity:0.2;cursor:default}
+.gallery-counter{position:absolute;bottom:10px;right:10px;background:rgba(13,10,11,.7);border-radius:20px;padding:3px 10px;font-size:11px;color:var(--text-muted);backdrop-filter:blur(4px)}
+.gallery-thumbs{display:flex;gap:6px;padding:8px;background:var(--bg);overflow-x:auto;flex-shrink:0}
+.gallery-thumbs::-webkit-scrollbar{height:3px}
+.gallery-thumbs::-webkit-scrollbar-thumb{background:var(--surface2)}
+.gallery-thumb{width:52px;height:60px;border-radius:6px;overflow:hidden;flex-shrink:0;cursor:pointer;border:2px solid transparent;transition:border-color .2s;opacity:0.6;transition:all .2s}
+.gallery-thumb img{width:100%;height:100%;object-fit:cover}
+.gallery-thumb.active{border-color:var(--pink);opacity:1}
 .modal-info{flex:1;padding:24px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
 .modal-cat{font-size:11px;color:var(--pink);letter-spacing:.15em;text-transform:uppercase}
 .modal-name{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:400;line-height:1.2}
@@ -313,7 +326,7 @@ footer p{font-size:12px;color:var(--text-dim)}
 //  ⚙️  YOUR CONFIGURATION — Edit these 2 lines only
 // ════════════════════════════════════════════════════
 const WHATSAPP_NUMBER = '919XXXXXXXXX'; // Your WhatsApp number with country code (no + or spaces)
-const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2Xfgyf1vVtoNuOFkePha7InYsyGhIO46lnkpDF1uKbA_SOGBdpsQA-i3YTHMxTqrnJSObDy_gYFow/pub?gid=0&single=true&output=csv'; // Paste your published Google Sheet CSV URL here
+const SHEET_URL = ''; // Paste your published Google Sheet CSV URL here
 // ════════════════════════════════════════════════════
 
 // Sample data shown when no sheet is connected
@@ -466,11 +479,28 @@ function openModal(id) {
   document.getElementById('modalPrice').textContent = `₹${p.price}`;
   document.getElementById('modalFabric').textContent = p.fabric || '';
 
-  // Image
+  // Gallery — split images by |
   const imgEl = document.getElementById('modalImg');
-  imgEl.innerHTML = p.image
-    ? `<img src="${p.image}" alt="${p.name}" style="width:100%;height:100%;object-fit:cover"><div class="no-img" style="display:none">🌸</div>`
-    : `<div class="no-img">🌸</div>`;
+  const imgs = (p.image||'').split('|').map(s=>s.trim()).filter(Boolean);
+  window._galleryImgs = imgs;
+  window._galleryIdx = 0;
+  if (imgs.length === 0) {
+    imgEl.innerHTML = `<div class="no-img">🌸</div>`;
+  } else if (imgs.length === 1) {
+    imgEl.innerHTML = `<div class="gallery-main"><img src="${imgs[0]}" alt="${p.name}" id="galleryMain"></div>`;
+  } else {
+    const thumbs = imgs.map((u,i)=>`<div class="gallery-thumb ${i===0?'active':''}" onclick="galleryGo(${i})"><img src="${u}" alt="photo ${i+1}"></div>`).join('');
+    imgEl.innerHTML = `
+      <div class="gallery-main">
+        <img src="${imgs[0]}" alt="${p.name}" id="galleryMain">
+        <div class="gallery-nav">
+          <button class="gallery-btn" id="galleryPrev" onclick="galleryStep(-1)">&#8249;</button>
+          <button class="gallery-btn" id="galleryNext" onclick="galleryStep(1)">&#8250;</button>
+        </div>
+        <div class="gallery-counter" id="galleryCounter">1 / ${imgs.length}</div>
+      </div>
+      <div class="gallery-thumbs">${thumbs}</div>`;
+  }
 
   // Colors
   const colors = (p.colors||'').split(',').filter(Boolean);
@@ -549,6 +579,25 @@ function addToBasket() {
   updateCartCount();
   closeModal();
   openCart();
+}
+
+// ── Gallery navigation ──
+function galleryGo(idx) {
+  const imgs = window._galleryImgs;
+  if (!imgs || idx < 0 || idx >= imgs.length) return;
+  window._galleryIdx = idx;
+  const main = document.getElementById('galleryMain');
+  const counter = document.getElementById('galleryCounter');
+  const thumbs = document.querySelectorAll('.gallery-thumb');
+  if (main) main.src = imgs[idx];
+  if (counter) counter.textContent = `${idx+1} / ${imgs.length}`;
+  thumbs.forEach((t,i) => t.classList.toggle('active', i === idx));
+}
+function galleryStep(dir) {
+  const imgs = window._galleryImgs;
+  if (!imgs) return;
+  const next = (window._galleryIdx + dir + imgs.length) % imgs.length;
+  galleryGo(next);
 }
 
 // ── Cart ──
